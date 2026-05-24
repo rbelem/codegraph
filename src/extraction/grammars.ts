@@ -49,6 +49,7 @@ const WASM_GRAMMAR_FILES: Record<GrammarLanguage, string> = {
   terraform: 'tree-sitter-terraform.wasm',
   arkts: 'tree-sitter-arkts.wasm',
   nix: 'tree-sitter-nix.wasm',
+  perl: 'tree-sitter-perl.wasm',
 };
 
 /**
@@ -169,6 +170,8 @@ export const EXTENSION_MAP: Record<string, Language> = {
   '.tf': 'terraform',
   '.tfvars': 'terraform',
   '.tofu': 'terraform',
+  '.pl': 'perl',
+  '.pm': 'perl',
 };
 
 /**
@@ -310,7 +313,9 @@ export async function loadGrammarsForLanguages(languages: Language[]): Promise<v
       // 0.25.10 (`generate` + `build --wasm`, ABI 15 — upstream's checked-in
       // parser.c is still ABI 13; all 54 upstream corpus tests pass on the
       // regenerated parser).
-      const wasmPath = (lang === 'pascal' || lang === 'scala' || lang === 'lua' || lang === 'luau' || lang === 'csharp' || lang === 'r' || lang === 'cfml' || lang === 'cfscript' || lang === 'cfquery' || lang === 'cobol' || lang === 'vbnet' || lang === 'erlang' || lang === 'terraform' || lang === 'arkts' || lang === 'nix')
+      // Perl: tree-sitter-wasms doesn't ship it; we vendor the prebuilt
+      // tree-sitter-perl.wasm from tree-sitter-perl/tree-sitter-perl.
+      const wasmPath = (lang === 'pascal' || lang === 'scala' || lang === 'lua' || lang === 'luau' || lang === 'csharp' || lang === 'r' || lang === 'cfml' || lang === 'cfscript' || lang === 'cfquery' || lang === 'cobol' || lang === 'vbnet' || lang === 'erlang' || lang === 'terraform' || lang === 'arkts' || lang === 'nix' || lang === 'perl')
         ? path.join(__dirname, 'wasm', wasmFile)
         : require.resolve(`tree-sitter-wasms/out/${wasmFile}`);
       const language = await WasmLanguage.load(wasmPath);
@@ -535,6 +540,7 @@ export function getLanguageDisplayName(language: Language): string {
     objc: 'Objective-C',
     solidity: 'Solidity',
     nix: 'Nix',
+    perl: 'Perl',
     yaml: 'YAML',
     twig: 'Twig',
     xml: 'XML',

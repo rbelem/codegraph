@@ -2798,6 +2798,38 @@ export class TreeSitterExtractor {
           isExported,
         });
       }
+    } else if (this.language === 'perl') {
+      // Perl: variable_declaration has either a `variable` field (single scalar)
+      // or `variables` field (list of scalars in parens). Each scalar has a
+      // varname child node. Handles:
+      //   my $x       → variable: scalar → varname
+      //   my ($x, $y) → variables: scalar → varname, scalar → varname
+      const collectInfo = (scalarNode: SyntaxNode, valueText?: string): void => {
+        const varname = scalarNode.namedChildren.find((c) => c.type === 'varname');
+        if (!varname) return;
+        const name = getNodeText(varname, this.source);
+        if (!name) return;
+        const initSignature = valueText ? `= ${valueText.slice(0, 100)}${valueText.length >= 100 ? '...' : ''}` : undefined;
+        this.createNode(kind, name, scalarNode, { docstring, signature: initSignature, isExported });
+      };
+
+      // Single: `my $x` or `my $x = expr`
+      const singleVar = node.childForFieldName('variable');
+      if (singleVar && singleVar.type === 'scalar') {
+        // Check if this is inside an assignment_expression (has initializer)
+        const assignParent = node.parent?.type === 'assignment_expression' ? node.parent : null;
+        const valueNode = assignParent ? getChildByField(assignParent, 'right') : undefined;
+        const valueText = valueNode ? getNodeText(valueNode, this.source) : undefined;
+        collectInfo(singleVar, valueText);
+      }
+
+      // Multiple (list): `my ($x, $y)` or `my ($x, $y) = (...)`
+      const multiVars = node.namedChildren.filter(
+        (c) => c.type === 'scalar' && c !== singleVar
+      );
+      if (multiVars.length > 0) {
+        multiVars.forEach((scalar) => collectInfo(scalar));
+      }
     } else {
       // Generic fallback for other languages
       // Try to find identifier children

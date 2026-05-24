@@ -8130,11 +8130,6 @@ void helperFunction(int count) {
   });
 
   it('should reconstruct multi-keyword selectors at the call site so they resolve to the method definition', () => {
-    // Regression for the gap discovered post-#165: message_expression's
-    // multi-keyword form `[obj a:1 b:2]` was only emitting the first keyword,
-    // so calls never resolved to multi-part method definitions like
-    // `GET:parameters:headers:progress:success:failure:`. The call-site name
-    // must match the method-definition name with full keywords + trailing colons.
     const code = `
 @implementation Caller
 - (void)demo {
@@ -10939,3 +10934,153 @@ import DataStore from '../data/DataStore';
     });
   });
 });
+
+// =============================================================================
+// Perl
+// =============================================================================
+
+describe('Perl Extraction', () => {
+  describe('Language detection', () => {
+    it('should detect Perl files', () => {
+      expect(detectLanguage('script.pl')).toBe('perl');
+      expect(detectLanguage('MyModule.pm')).toBe('perl');
+      expect(detectLanguage('lib/Foo/Bar.pm')).toBe('perl');
+    });
+
+    it('should report Perl as supported', () => {
+      expect(isLanguageSupported('perl')).toBe(true);
+      expect(getSupportedLanguages()).toContain('perl');
+    });
+  });
+
+  describe('Function extraction', () => {
+    it('should extract subroutines as functions', () => {
+      const code = `
+sub greet {
+    my $name = shift;
+    return "Hello, $name!";
+}
+sub helper {
+    return 42;
+}
+`;
+      const result = extractFromSource('test.pl', code);
+      const funcs = result.nodes.filter((n) => n.kind === 'function').map((n) => n.name);
+      expect(funcs).toContain('greet');
+      expect(funcs).toContain('helper');
+    });
+
+    it('should include signature for subroutines', () => {
+      const code = `
+sub compute {
+    my ($x, $y) = @_;
+    return $x + $y;
+}
+`;
+      const result = extractFromSource('math.pl', code);
+      const compute = result.nodes.find((n) => n.name === 'compute');
+      expect(compute).toBeDefined();
+      expect(compute?.language).toBe('perl');
+      expect(compute?.kind).toBe('function');
+    });
+  });
+
+  describe('Package extraction', () => {
+    it('should extract packages as module nodes', () => {
+      const code = `
+package MyApp::Greeter;
+sub hello {
+    return "hi";
+}
+1;
+`;
+      const result = extractFromSource('Greeter.pm', code);
+      const modules = result.nodes.filter((n) => n.kind === 'module').map((n) => n.name);
+      expect(modules).toContain('MyApp::Greeter');
+    });
+  });
+
+  describe('Import extraction', () => {
+    it('should extract use statements as imports', () => {
+      const code = `use strict;
+use File::Basename;
+use Data::Dumper qw(Dumper);
+`;
+      const result = extractFromSource('test.pl', code);
+      const imports = result.nodes.filter((n) => n.kind === 'import').map((n) => n.name);
+      expect(imports).toContain('strict');
+      expect(imports).toContain('File::Basename');
+      expect(imports).toContain('Data::Dumper');
+
+      const ref = result.unresolvedReferences.find(
+        (r) => r.referenceKind === 'imports' && r.referenceName === 'File::Basename'
+      );
+      expect(ref).toBeDefined();
+    });
+
+    it('should extract require expressions as imports', () => {
+      const code = `
+require Exporter;
+require "utils.pl";
+`;
+      const result = extractFromSource('test.pl', code);
+      const imports = result.nodes.filter((n) => n.kind === 'import').map((n) => n.name);
+      expect(imports).toContain('Exporter');
+      expect(imports).toContain('utils.pl');
+    });
+  });
+
+  describe('Variable extraction', () => {
+    it('should extract scalar variable declarations', () => {
+      const code = `
+my $name = "world";
+my $count = 0;
+`;
+      const result = extractFromSource('test.pl', code);
+      const vars = result.nodes.filter((n) => n.kind === 'variable').map((n) => n.name);
+      expect(vars).toContain('name');
+      expect(vars).toContain('count');
+    });
+
+    it('should extract list variable declarations', () => {
+      const code = `
+my ($greeting, $name) = @_;
+my ($x, $y, $z);
+`;
+      const result = extractFromSource('test.pl', code);
+      const vars = result.nodes.filter((n) => n.kind === 'variable').map((n) => n.name);
+      expect(vars).toContain('greeting');
+      expect(vars).toContain('name');
+      expect(vars).toContain('x');
+      expect(vars).toContain('y');
+      expect(vars).toContain('z');
+    });
+  });
+
+  describe('File node', () => {
+    it('should create a file-kind node for Perl files', () => {
+      const code = `1;\n`;
+      const result = extractFromSource('test.pl', code);
+      const fileNode = result.nodes.find((n) => n.kind === 'file');
+      expect(fileNode).toBeDefined();
+      expect(fileNode?.name).toBe('test.pl');
+      expect(fileNode?.filePath).toBe('test.pl');
+      expect(fileNode?.language).toBe('perl');
+    });
+  });
+
+  describe('Call extraction', () => {
+    it('should record intra-file calls as unresolved references', () => {
+      const code = `
+sub greet { return "hi"; }
+sub run { return greet(); }
+`;
+      const result = extractFromSource('test.pl', code);
+      const call = result.unresolvedReferences.find(
+        (r) => r.referenceKind === 'calls' && r.referenceName === 'greet'
+      );
+      expect(call).toBeDefined();
+    });
+  });
+});
+
