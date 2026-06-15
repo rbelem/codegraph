@@ -4,6 +4,8 @@
 
 ## 🎉 1.0 Released!
 
+Already installed? Run `codegraph upgrade` to update in place.
+
 Follow [@getcodegraph](https://x.com/getcodegraph) on X for updates.
 
 ### Supercharge Claude Code, Cursor, Codex, OpenCode, Hermes Agent, Gemini, Antigravity, and Kiro with Semantic Code Intelligence
@@ -53,7 +55,8 @@ curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install
 irm https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.ps1 | iex
 ```
 
-Already have Node? Use npm instead (works on any version):
+<details>
+<summary><b>Already have Node? Use npm instead (works on any version)</b></summary>
 
 ```bash
 npm i -g @colbymchenry/codegraph
@@ -62,6 +65,8 @@ npm i -g @colbymchenry/codegraph
 <sub>CodeGraph bundles its own runtime — nothing to compile, no native build, works the same everywhere. The installer puts `codegraph` on your PATH but **doesn't change your current shell** — open a new terminal before the next step so the command resolves.</sub>
 
 <sub>**Upgrade any time** with `codegraph upgrade` — it detects how you installed (bundle, npm, or npx) and updates in place. Add `--check` to see if an update is available, or `codegraph upgrade <version>` to pin one.</sub>
+
+</details>
 
 ### 2. Wire up your agent(s)
 
@@ -77,16 +82,20 @@ codegraph install
 
 ```bash
 cd your-project
-codegraph init -i
+codegraph init
 ```
 
-<sub>`codegraph init` just creates the local `.codegraph/` index directory; adding `-i` (`--index`) also builds the initial graph in the same step. Without `-i`, run `codegraph index` afterwards to populate it.</sub>
+<sub>`codegraph init` creates the local `.codegraph/` directory and builds the full graph in the same step — one command, done.</sub>
 
 <div align="center">
 
 ![1_C_VYnhpys0UHrOuOgpgoyw](https://github.com/user-attachments/assets/f168182f-4d9a-44e0-94d7-08d018cc8a3a)
 
 </div>
+
+### 4. No more syncing!
+
+Auto-sync is enabled by default. CodeGraph watches the project and updates the graph on every file change — while your agent edits code, or you add, modify, or delete files. **The index is never stale, and there is nothing to re-run.**
 
 ### Uninstall
 
@@ -359,10 +368,10 @@ Restart your agent (Claude Code / Cursor / Codex CLI / opencode / Hermes Agent /
 
 ```bash
 cd your-project
-codegraph init -i
+codegraph init
 ```
 
-Builds the per-project knowledge graph index. A single global `codegraph install` works in every project you open — no need to re-run the installer per project.
+Builds the per-project knowledge graph index, which then auto-syncs on every file change. A single global `codegraph install` works in every project you open — no need to re-run the installer per project.
 
 That's it — your agent will use CodeGraph tools automatically when a `.codegraph/` directory exists.
 
@@ -467,6 +476,7 @@ codegraph uninit [path]           # Remove CodeGraph from a project (--force to 
 codegraph index [path]            # Full index (--force to re-index, --quiet for less output)
 codegraph sync [path]             # Incremental update
 codegraph status [path]           # Show statistics
+codegraph unlock [path]           # Remove a stale lock file that's blocking indexing
 codegraph query <search>          # Search symbols (--kind, --limit, --json)
 codegraph explore <query>         # Relevant symbols' source + call paths in one shot (same output as the codegraph_explore MCP tool)
 codegraph node <symbol|file>      # One symbol's source + callers, or read a file with line numbers (same output as codegraph_node)
@@ -475,8 +485,11 @@ codegraph callers <symbol>        # Find what calls a function/method (--limit, 
 codegraph callees <symbol>        # Find what a function/method calls (--limit, --json)
 codegraph impact <symbol>         # Analyze what code is affected by changing a symbol (--depth, --json)
 codegraph affected [files...]     # Find test files affected by changes (see below)
-codegraph serve --mcp             # Start MCP server
+codegraph daemon                  # Manage background daemons — pick one to stop (alias: daemons)
+codegraph telemetry [on|off]      # Show or change anonymous usage telemetry
 codegraph upgrade [version]       # Update to the latest release (--check, --force)
+codegraph version                 # Print the installed version (also -v, --version)
+codegraph help [command]          # Show help, optionally for one command
 ```
 
 ### `codegraph affected`
@@ -710,7 +723,7 @@ Framework routing is validated the same way, on a canonical app per framework: E
 - **You're on an old (pre-0.9) install.** Reinstall to get the bundled runtime — `curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh` (macOS/Linux), `irm https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.ps1 | iex` (Windows), or `npm i -g @colbymchenry/codegraph@latest`.
 - **`codegraph status` shows `Journal:` other than `wal`** — WAL couldn't be enabled on this filesystem (common on network shares and WSL2 `/mnt`), so reads can block on writes. Move the project (with its `.codegraph/` folder) onto a local disk.
 
-**MCP server not connecting** — Ensure the project is initialized/indexed, verify the path in your MCP config, and check that `codegraph serve --mcp` works from the command line.
+**MCP server not connecting** — Your agent starts the server itself, so you don't launch it by hand. Make sure the project is initialized and indexed (`codegraph status`) and that the path in your MCP config is correct. If it still won't connect, re-run `codegraph install` to rewrite the config.
 
 **Missing symbols** — The MCP server auto-syncs on save (wait a couple seconds). Run `codegraph sync` manually if needed. Check that the file's language is supported and isn't inside a `.gitignore`d or default-excluded directory (e.g. `node_modules`, `dist`).
 
