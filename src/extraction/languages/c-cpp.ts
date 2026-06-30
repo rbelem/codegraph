@@ -85,6 +85,33 @@ export function normalizeCppReturnType(raw: string): string | undefined {
 }
 
 /**
+ * Strip C++ template arguments from a base-type reference name so it matches the
+ * bare class/struct the template was DEFINED as. `template<typename T> class
+ * Base { … }` is indexed as a node named `Base`, but a derived class
+ * `class D : public Base<int>` records its base as the full `Base<int>` (and
+ * `class Q : public ns::Tpl<int>` as `ns::Tpl<int>`) — neither name-matches
+ * `Base` / `ns::Tpl`, so the `extends` edge never resolves and the derived class
+ * looks like it inherits from nothing (#1043).
+ *
+ * Removes every balanced `<…>` group regardless of nesting or position, so
+ * `Base<int>` → `Base`, `ns::Tpl<Foo<int>>` → `ns::Tpl`, and the rare
+ * `Outer<int>::Inner` → `Outer::Inner`. The remaining qualified head is exactly
+ * what the non-templated base case already produces, so resolution treats them
+ * identically. A name with no template args passes through unchanged.
+ */
+export function stripCppTemplateArgs(name: string): string {
+  if (!name.includes('<')) return name;
+  let out = '';
+  let depth = 0;
+  for (const ch of name) {
+    if (ch === '<') depth++;
+    else if (ch === '>') { if (depth > 0) depth--; }
+    else if (depth === 0) out += ch;
+  }
+  return out.trim();
+}
+
+/**
  * A function/method's return type lives in the `function_definition`'s `type`
  * field (`Metrics& Metrics::instance()` → `Metrics`). Constructors, destructors,
  * and conversion operators have no `type` field → undefined.
@@ -182,7 +209,40 @@ function isMacroMisparsedTypeDecl(node: SyntaxNode): boolean {
   return true;
 }
 
+/**
+ * Blank an export/visibility macro in a `class/struct EXPORT_MACRO Name …`
+ * *definition* header before parsing. Not knowing the macro, tree-sitter reads
+ * `class EXPORT_MACRO` as an elaborated type specifier and the rest as a
+ * function, so the whole class — its name, base clause, and members — drops out
+ * of the index (#946 catches the resulting phantom function but can't recover
+ * the class), which silently breaks type-hierarchy / inheritance-impact queries
+ * for effectively every Unreal-Engine (`*_API`), Qt/Boost (`*_EXPORT`), LLVM
+ * (`*_ABI`), … class. Replacing the macro with equal-length spaces preserves
+ * every byte offset (and thus line/column), so the declaration then parses as a
+ * normal class_specifier and the existing extraction emits the node, members,
+ * and `extends` edge. (#1061, follow-up to #946.)
+ *
+ * Matched tightly so it can't touch the same macro used as an ordinary value
+ * elsewhere (`int x = SOME_API;`): the macro is the ALL-CAPS token sitting
+ * *between* `class`/`struct` and the type name, and the trailing `[:{]`
+ * definition-guard fires only when a base clause or body follows — the only
+ * shape that misparses. That guard also leaves elaborated-type variable
+ * declarations (`struct FOO var;`, `class FOO obj = …`) untouched, since those
+ * end in `;` / `=` / `[`, never `:` / `{`. C++-only (wired into cppExtractor),
+ * so C's heavier use of `struct TAG var;` never reaches it.
+ */
+export function blankCppExportMacros(source: string): string {
+  if (source.indexOf('class') === -1 && source.indexOf('struct') === -1) return source;
+  return source.replace(
+    /\b(class|struct)(\s+)([A-Z][A-Z0-9_]+)(?=\s+[A-Za-z_]\w*(?:\s+final)?\s*[:{])/g,
+    (_m, kw, ws, macro) => kw + ws + ' '.repeat(macro.length)
+  );
+}
+
 export const cppExtractor: LanguageExtractor = {
+  // Recover macro-annotated class/struct definitions (`class MYMODULE_API Foo : Base`)
+  // that tree-sitter otherwise misparses into a phantom function (#1061/#946).
+  preParse: blankCppExportMacros,
   functionTypes: ['function_definition'],
   classTypes: ['class_specifier'],
   methodTypes: ['function_definition'],
@@ -235,7 +295,9 @@ export const cppExtractor: LanguageExtractor = {
     const cppKeywords = ['switch', 'if', 'for', 'while', 'do', 'case', 'return'];
     if (cppKeywords.includes(name)) return true;
     // `class MACRO Name : public Base { … }` misparses to a function_definition
-    // named after the class — drop that phantom (#946).
+    // named after the class. `blankCppExportMacros` (preParse) recovers the
+    // common ALL-CAPS export-macro shape; this drop is the fallback for any
+    // residual misparse it doesn't blank — still no phantom function (#1061/#946).
     return isMacroMisparsedTypeDecl(node);
   },
   extractImport: (node, source) => {
