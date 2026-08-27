@@ -50,6 +50,7 @@ const WASM_GRAMMAR_FILES: Record<GrammarLanguage, string> = {
   terraform: 'tree-sitter-terraform.wasm',
   arkts: 'tree-sitter-arkts.wasm',
   nix: 'tree-sitter-nix.wasm',
+  perl: 'tree-sitter-perl.wasm',
 };
 
 /**
@@ -90,6 +91,8 @@ export const EXTENSION_MAP: Record<string, Language> = {
   '.cshtml': 'razor',
   '.razor': 'razor',
   '.php': 'php',
+  '.pl': 'perl',
+  '.pm': 'perl',
   // Drupal-specific PHP file extensions
   '.module': 'php',
   '.install': 'php',
@@ -685,6 +688,7 @@ export function getLanguageDisplayName(language: Language): string {
     objc: 'Objective-C',
     solidity: 'Solidity',
     nix: 'Nix',
+    perl: 'Perl',
     yaml: 'YAML',
     twig: 'Twig',
     xml: 'XML',
